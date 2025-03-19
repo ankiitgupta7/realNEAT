@@ -67,53 +67,38 @@ def get_activation_fn(name):
 # Build Feedforward
 # -----------------------------------
 def build_feedforward(genome: Genome, input_size, output_size):
-    """
-    Convert genome into a JAX-pure function forward_fn(params, x).
-    We'll ignore 'params' because the weights are stored in the genome connections.
-    """
     act_fn = get_activation_fn(genome.activation)
 
-    # Separate nodes
     input_nodes = [n for n in genome.node_ids if n.startswith("in")]
     output_nodes = [n for n in genome.node_ids if n.startswith("out")]
     hidden_nodes = [n for n in genome.node_ids if n.startswith("h")]
 
-    # Build adjacency
     adjacency = {n: [] for n in genome.node_ids}
     for (in_id, out_id, w, en) in genome.connections:
-        if en and out_id in adjacency:  # ensure the out_id is a valid node
+        if en:
             adjacency[out_id].append((in_id, w))
 
-    # We do a naive forward pass respecting the order: input -> hidden -> output
-    # For hidden nodes, we’ll assume no complex cycles. If your network can have cycles,
-    # you’d need a topological sort or a recurrent approach.
-
     def forward_fn(_, x):
-        """
-        x shape: (batch_size, input_size)
-        """
-        node_values = {}
-        # Assign input node values from x
+        node_values = {n: jnp.zeros((x.shape[0],)) for n in genome.node_ids}  # Initialize all nodes
+
         for i, in_node in enumerate(input_nodes):
             node_values[in_node] = x[:, i]
 
-        # Compute hidden node activations
         for h in hidden_nodes:
-            inputs_sum = jnp.zeros((x.shape[0],))
-            for (in_id, w) in adjacency[h]:
-                inputs_sum += node_values[in_id] * w
-            node_values[h] = act_fn(inputs_sum)
+            if h in adjacency:
+                inputs_sum = jnp.zeros((x.shape[0],))
+                for (in_id, w) in adjacency[h]:
+                    inputs_sum += node_values.get(in_id, 0) * w  # Use .get() to avoid KeyError
+                node_values[h] = act_fn(inputs_sum)
 
-        # Compute outputs (no activation or optional activation)
         outputs = []
         for out_node in output_nodes:
             inputs_sum = jnp.zeros((x.shape[0],))
             for (in_id, w) in adjacency[out_node]:
-                inputs_sum += node_values[in_id] * w
-            # For classification, we can do raw logits
+                inputs_sum += node_values.get(in_id, 0) * w  # Use .get() to avoid KeyError
             outputs.append(inputs_sum)
 
-        return jnp.stack(outputs, axis=-1)  # shape: (batch_size, num_outputs)
+        return jnp.stack(outputs, axis=-1)
 
     return forward_fn
 
@@ -174,48 +159,38 @@ def train_genome_backprop(genome: Genome,
 # -----------------------------------
 def mutate(genome: Genome):
     """
-    1) Weight perturbations
-    2) Possibly add new node
-    3) Possibly add new connection
+    - Mutates connection weights
+    - Adds a hidden node with sequential naming (h1, h2, ...)
+    - Adds a new connection if needed
     """
-    # Weight mutation
     new_connections = []
     for (i_node, o_node, w, en) in genome.connections:
         if random.random() < MUTATION_RATE:
-            # random slight perturbation
             w += np.random.normal(scale=0.1)
         new_connections.append((i_node, o_node, w, en))
     genome.connections = new_connections
 
-    # Add new node
+    # Add a new node with a simple incremental name (h1, h2, ...)
     if random.random() < ADD_NODE_RATE and len(genome.connections) > 0:
         conn_idx = np.random.randint(len(genome.connections))
-        (in_id, out_id, w, en) = genome.connections[conn_idx]
+        in_id, out_id, w, en = genome.connections[conn_idx]
         if en:
-            # disable old
             genome.connections[conn_idx] = (in_id, out_id, w, False)
-            # create new hidden node
-            # to ensure unique ID, we can do e.g. random.getrandbits(32)
-            new_id = f"h{random.getrandbits(32)}"
-            # add to node_ids
-            if new_id not in genome.node_ids:
-                genome.node_ids.append(new_id)
-            # connect in_id -> new_id
-            genome.connections.append((in_id, new_id, 1.0, True))
-            # connect new_id -> out_id
-            genome.connections.append((new_id, out_id, w, True))
 
-    # Add new connection
+            # Find the next available hidden node name
+            existing_hidden_nodes = [n for n in genome.node_ids if n.startswith("h")]
+            new_hid_id = f"h{len(existing_hidden_nodes) + 1}"  # Sequential naming
+
+            genome.node_ids.append(new_hid_id)
+            genome.connections.append((in_id, new_hid_id, 1.0, True))
+            genome.connections.append((new_hid_id, out_id, w, True))
+
+    # Add a new connection if needed
     if random.random() < ADD_CONN_RATE:
         possible_nodes = genome.node_ids[:]
-        n1 = random.choice(possible_nodes)
-        n2 = random.choice(possible_nodes)
-        # avoid self-loop
-        if n1 != n2:
-            # check if no existing connection
-            already_exists = any((c[0] == n1 and c[1] == n2) for c in genome.connections)
-            if not already_exists:
-                genome.connections.append((n1, n2, np.random.normal(), True))
+        n1, n2 = random.sample(possible_nodes, 2)
+        if n1 != n2 and not any((c[0] == n1 and c[1] == n2) for c in genome.connections):
+            genome.connections.append((n1, n2, np.random.normal(), True))
 
 # -----------------------------------
 # Crossover

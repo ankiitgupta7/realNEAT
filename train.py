@@ -198,7 +198,7 @@ def main(args):
             frame_path = f"viz_frames/gen_{gen}.png"
             img = imageio.imread(frame_path)
             images.append(img)
-        imageio.mimsave("best_genomes_{args.task}.gif", images, fps=1)
+        imageio.mimsave(f"best_genomes_{args.task}.gif", images, fps=1)
         print("GIF saved to best_genomes.gif")
     except Exception as e:
         print("Could not create GIF:", e)
