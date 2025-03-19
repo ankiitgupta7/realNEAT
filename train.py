@@ -1,31 +1,36 @@
 """
-train_backprop_neat_jax.py
+train.py
 
-Example usage of the Backprop NEAT in JAX. Demonstrates:
-- Generating toy classification datasets (Circle, XOR, Spiral).
-- Evolving a population of networks via NEAT.
-- Training each genome's weights using JAX backprop for a few epochs.
-- Evaluating and selecting the best genome.
-- (Optional) Saving or visualizing results.
+Usage:
+  python train.py --task circle --generations 10 --pop_size 50
 
-Run:
-  python train_backprop_neat_jax.py --task circle --generations 10
+Features:
+- Trains a population via NEAT with JAX-based backprop for weights
+- TQDM progress bar
+- Complexity penalty
+- Visualization each generation
+- GIF creation for best-network evolution
 """
 
 import argparse
+import os
 import numpy as np
 import jax.numpy as jnp
-from jax import random
+import networkx as nx
+import matplotlib.pyplot as plt
+import imageio
+from tqdm import tqdm
+import random
 
-from bp_neat import (Population,
-                               train_genome_backprop,
-                               evaluate_genome,
-                               mutate,
-                               crossover)
+from bp_neat import (
+    Genome, mutate, crossover, train_genome_backprop,
+    evaluate_genome, raw_accuracy,
+    POPULATION_SIZE
+)
 
-# -----------------------------
+# -----------------------------------
 # Data Generators
-# -----------------------------
+# -----------------------------------
 def generate_circle_data(n=200, radius=1.0):
     X = np.random.uniform(-1.5, 1.5, size=(n, 2))
     y = np.array([1 if (x[0]**2 + x[1]**2) < radius**2 else 0 for x in X])
@@ -37,10 +42,6 @@ def generate_xor_data(n=200):
     return jnp.array(X, dtype=jnp.float32), jnp.array(y, dtype=jnp.float32)
 
 def generate_spiral_data(n=200, turns=1):
-    """
-    Two-spiral dataset (simplified).
-    We'll generate points for two spirals, label them 0 or 1.
-    """
     n_class = n // 2
     theta = np.sqrt(np.random.rand(n_class,1)) * 2 * np.pi * turns
     r_a = 2*theta + np.pi
@@ -52,83 +53,163 @@ def generate_spiral_data(n=200, turns=1):
 
     X = np.vstack([data_a, data_b])
     y = np.array([0]*n_class + [1]*n_class)
-    # shuffle
     idx = np.arange(n)
     np.random.shuffle(idx)
     X, y = X[idx], y[idx]
     return jnp.array(X, dtype=jnp.float32), jnp.array(y, dtype=jnp.float32)
 
-# -----------------------------
-# Main training loop
-# -----------------------------
-def main(args):
-    # 1) Generate data
-    if args.task == "circle":
-        X, y = generate_circle_data(n=400, radius=1.0)
-    elif args.task == "xor":
-        X, y = generate_xor_data(n=400)
-    elif args.task == "spiral":
-        X, y = generate_spiral_data(n=400, turns=1)
-    else:
-        raise ValueError("Unknown task: {}".format(args.task))
+# -----------------------------------
+# Population
+# -----------------------------------
+class Population:
+    def __init__(self, input_size, output_size, population_size=50):
+        self.input_size = input_size
+        self.output_size = output_size
+        self.genomes = []
+        for _ in range(population_size):
+            node_ids = [f"in{i}" for i in range(input_size)] + \
+                       [f"out{o}" for o in range(output_size)]
+            connections = []
+            for i_in in range(input_size):
+                for i_out in range(output_size):
+                    w = np.random.normal(scale=0.1)
+                    connections.append((f"in{i_in}", f"out{i_out}", w, True))
+            g = Genome(node_ids, connections, activation="relu")
+            self.genomes.append(g)
 
-    input_size = X.shape[1]
-    output_size = 1  # binary classification
+def visualize_genome(genome: Genome, save_path=None):
+    """
+    Draw the genome as a directed graph using networkx.
+    """
+    G = nx.DiGraph()
+    # add nodes
+    for n in genome.node_ids:
+        G.add_node(n)
+    # add edges
+    for (i_node, o_node, w, en) in genome.connections:
+        if en:
+            G.add_edge(i_node, o_node, weight=w)
+
+    # layout
+    # separate layers: input at top, hidden middle, output bottom
+    input_nodes = [n for n in genome.node_ids if n.startswith("in")]
+    hidden_nodes = [n for n in genome.node_ids if n.startswith("h")]
+    output_nodes = [n for n in genome.node_ids if n.startswith("out")]
+
+    # positions for each node in a layered manner
+    pos = {}
+    # input layer
+    for i, n in enumerate(input_nodes):
+        pos[n] = (i, 2)
+    # hidden
+    for i, n in enumerate(hidden_nodes):
+        pos[n] = (i, 1)
+    # output
+    for i, n in enumerate(output_nodes):
+        pos[n] = (i, 0)
+
+    plt.figure(figsize=(8,6))
+    nx.draw(G, pos, with_labels=True, node_size=1000, node_color='lightblue', arrows=True)
+    # edge labels
+    edge_labels = {(u, v): f"{d['weight']:.2f}" for (u, v, d) in G.edges(data=True)}
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)
+
+    plt.title("Genome Visualization")
+    if save_path:
+        plt.savefig(save_path, dpi=150)
+    plt.close()
+
+def main(args):
+    # 1) Create data
+    if args.task == 'circle':
+        X, y = generate_circle_data(n=400, radius=1.0)
+        print("Circle data generated")
+    elif args.task == 'xor':
+        X, y = generate_xor_data(n=400)
+        print("XOR data generated")
+    elif args.task == 'spiral':
+        X, y = generate_spiral_data(n=400, turns=1)
+        print("Spiral data generated")
+    else:
+        raise ValueError("Unknown task")
 
     # 2) Initialize population
-    population = Population(input_size, output_size, population_size=args.pop_size)
+    pop = Population(input_size=2, output_size=1, population_size=args.pop_size)
 
-    # 3) Evolve for N generations
-    for gen in range(args.generations):
+    # For GIF frames
+    os.makedirs("viz_frames", exist_ok=True)
+    frames = []
+
+    # 3) Evolve
+    for gen in tqdm(range(args.generations), desc="Evolving Generations"):
+        # Evaluate + train each genome
         fitnesses = []
-        # For each genome: train it w/ backprop, then evaluate
-        for genome in population.genomes:
-            # Train the genome
+        for i, genome in enumerate(pop.genomes):
+            # Train genome weights via backprop
             train_genome_backprop(genome, X, y, steps=args.bp_steps, learning_rate=args.lr)
-            # Evaluate
-            acc = evaluate_genome(genome, X, y)
-            fitnesses.append(acc)
+            # Evaluate with complexity penalty
+            fit = evaluate_genome(genome, X, y)
+            fitnesses.append(fit)
 
-        # Sort by fitness
+        # track best
         sorted_indices = np.argsort(fitnesses)[::-1]  # descending
-        best_index = sorted_indices[0]
-        best_acc = fitnesses[best_index]
-        print(f"Generation {gen} | Best Accuracy: {best_acc:.3f}")
+        best_idx = sorted_indices[0]
+        best_fitness = fitnesses[best_idx]
+        best_genome = pop.genomes[best_idx]
+        # measure raw accuracy
+        best_acc = raw_accuracy(best_genome, X, y)
 
-        # Breed new population (simple approach: top half survive, produce offspring)
-        num_survivors = len(population.genomes)//2
+        print(f"[Gen {gen}] Best Fit (with penalty) = {best_fitness:.4f}, Raw Acc = {best_acc:.4f}")
+
+        # Visualization of best genome
+        frame_path = f"viz_frames/gen_{gen}.png"
+        visualize_genome(best_genome, save_path=frame_path)
+
+        # GA-like next generation
+        survivors_count = len(pop.genomes)//2
         new_genomes = []
-        for rank_idx in range(num_survivors):
+        for rank_idx in range(survivors_count):
             idx = sorted_indices[rank_idx]
-            new_genomes.append(population.genomes[idx])
-        # Reproduce
-        while len(new_genomes) < len(population.genomes):
-            parent1 = population.genomes[random.choice(random.PRNGKey(np.random.randint(100000)),
-                                                       jnp.array(sorted_indices[:num_survivors]))]
-            parent2 = population.genomes[random.choice(random.PRNGKey(np.random.randint(100000)),
-                                                       jnp.array(sorted_indices[:num_survivors]))]
+            new_genomes.append(pop.genomes[idx])
+
+        # Fill the rest with offspring
+        while len(new_genomes) < len(pop.genomes):
+            parent1 = pop.genomes[random.choice(sorted_indices[:survivors_count])]
+            parent2 = pop.genomes[random.choice(sorted_indices[:survivors_count])]
             child = crossover(parent1, parent2)
             mutate(child)
             new_genomes.append(child)
-        population.genomes = new_genomes
 
-    # Final best
-    # Evaluate or visualize final best genome
+        pop.genomes = new_genomes
+
+    # Final results
     final_fitnesses = []
-    for genome in population.genomes:
-        acc = evaluate_genome(genome, X, y)
-        final_fitnesses.append(acc)
-    best_final_idx = np.argmax(final_fitnesses)
-    print(f"Final Best Accuracy: {final_fitnesses[best_final_idx]:.4f}")
+    for g in pop.genomes:
+        final_fitnesses.append(evaluate_genome(g, X, y))
+    best_idx = np.argmax(final_fitnesses)
+    final_best_genome = pop.genomes[best_idx]
+    final_best_acc = raw_accuracy(final_best_genome, X, y)
+    print(f"Final Best Raw Accuracy: {final_best_acc:.4f}")
+
+    # Create GIF from frames
+    try:
+        images = []
+        for gen in range(args.generations):
+            frame_path = f"viz_frames/gen_{gen}.png"
+            img = imageio.imread(frame_path)
+            images.append(img)
+        imageio.mimsave("best_genomes_{args.task}.gif", images, fps=1)
+        print("GIF saved to best_genomes.gif")
+    except Exception as e:
+        print("Could not create GIF:", e)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="circle", help="circle, xor, spiral")
-    parser.add_argument("--generations", type=int, default=5, help="Number of NEAT generations")
-    parser.add_argument("--pop_size", type=int, default=50, help="Population size")
-    parser.add_argument("--bp_steps", type=int, default=100, help="Steps of backprop for each evaluation")
-    parser.add_argument("--lr", type=float, default=1e-2, help="Learning rate for backprop")
+    parser.add_argument("--task", type=str, default="xor", help="circle|xor|spiral")
+    parser.add_argument("--generations", type=int, default=10)
+    parser.add_argument("--pop_size", type=int, default=20)
+    parser.add_argument("--bp_steps", type=int, default=100, help="Backprop steps per genome evaluation")
+    parser.add_argument("--lr", type=float, default=1e-2)
     args = parser.parse_args()
-
     main(args)
