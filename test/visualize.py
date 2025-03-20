@@ -34,6 +34,42 @@ def visualize_fitness_history(best_fitnesses, avg_fitnesses, complexities=None, 
     plt.close()
 
 
+def visualize_fitness_and_complexity_side_by_side(
+    best_fitnesses, avg_fitnesses,
+    best_complexities, avg_complexities,
+    save_path=None
+):
+    """
+    Plot best and average fitness on the left subplot, and best and average complexity on the right.
+    """
+    import matplotlib.pyplot as plt
+    gens = range(len(best_fitnesses))
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Left subplot: Fitness curves
+    axes[0].plot(gens, best_fitnesses, marker='o', color='blue', label='Best Fitness')
+    axes[0].plot(gens, avg_fitnesses, marker='x', color='orange', label='Avg Fitness')
+    axes[0].set_xlabel('Generation')
+    axes[0].set_ylabel('Fitness')
+    axes[0].set_title('Fitness Over Generations')
+    axes[0].legend()
+
+    # Right subplot: Complexity curves
+    axes[1].plot(gens, best_complexities, marker='o', color='green', linestyle='--', label='Best Complexity')
+    axes[1].plot(gens, avg_complexities, marker='x', color='red', linestyle='--', label='Avg Complexity')
+    axes[1].set_xlabel('Generation')
+    axes[1].set_ylabel('Complexity')
+    axes[1].set_title('Complexity Over Generations')
+    axes[1].legend()
+
+    fig.tight_layout()
+    if save_path:
+        _ensure_dir(save_path)
+        plt.savefig(save_path, dpi=300)
+    plt.close()
+
+
+
 def visualize_dataset(X_train, y_train, X_test=None, y_test=None, save_path=None):
     """
     Scatter plot of dataset points with class colors.
@@ -79,10 +115,21 @@ def layered_layout(genome):
         pos[n] = (2, i)
     return pos
 
-def visualize_genome(genome, save_path=None):
-    """Render a NEAT genome using NetworkX, save as an image."""
-    
-    plt.figure(figsize=(5, 5))
+def visualize_genome(
+    genome,
+    save_path=None,
+    generation=None,
+    train_acc=None,
+    test_acc=None,
+    activation_info="ReLU -> Sigmoid"
+):
+    """
+    Render a NEAT genome using NetworkX, and optionally annotate:
+      - generation index
+      - train/test accuracy
+      - activation function info
+    """
+    plt.figure(figsize=(6, 6))
     G = nx.DiGraph()
 
     # 1) Build graph from genome
@@ -94,18 +141,17 @@ def visualize_genome(genome, save_path=None):
             G.add_edge(c.in_node, c.out_node, weight=c.weight)
 
     # 2) Decide layout
-    # pos = nx.spring_layout(G, seed=42)  # or a custom layered layout
-    pos = layered_layout(genome)
+    pos = layered_layout(genome)  # or nx.spring_layout(G, seed=42)
 
     # 3) Assign colors by node type
     node_colors = {'input': 'lightblue', 'hidden': 'lightgray', 'output': 'lightgreen'}
     node_list = list(G.nodes())
     node_color_map = [node_colors[G.nodes[n]['type']] for n in node_list]
 
-    # 4) Draw
+    # 4) Draw the graph
     nx.draw(G, pos, with_labels=True, node_color=node_color_map, node_size=800, font_size=10)
 
-    # 5) Draw edge labels
+    # 5) Draw edge labels (rounded to 2 decimals)
     edge_labels = nx.get_edge_attributes(G, 'weight')
     edge_labels_rounded = {k: f"{v:.2f}" for k, v in edge_labels.items()}
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels_rounded, font_color='red')
@@ -116,21 +162,36 @@ def visualize_genome(genome, save_path=None):
         mpatches.Patch(color='lightgray', label='Hidden'),
         mpatches.Patch(color='lightgreen', label='Output')
     ]
-    plt.legend(handles=legend_handles, title="Node Types", loc="best")
+    plt.legend(handles=legend_handles, title="Node Types", loc="upper left")
 
-    # 7) Mention the activation function used
-    # (In your code, it's ReLU in the first layer, Sigmoid in the output.)
-    plt.text(0.5, 1.05, "Activations: ReLU -> Sigmoid",
+    # 7) Title & Additional Text
+    # Basic title showing #nodes and #edges
+    plt.title(f"Genome (Nodes: {len(G.nodes())}, Edges: {len(G.edges())})", pad=20)
+
+    # Show activation info near the top center
+    plt.text(0.5, 1.04, f"Activations: {activation_info}",
              transform=plt.gca().transAxes,
              ha='center', va='bottom', fontsize=9)
 
-    plt.title(f"Genome (Nodes: {len(G.nodes())}, Edges: {len(G.edges())})")
+    # Generation + Accuracies in bottom-left corner
+    text_lines = []
+    if generation is not None:
+        text_lines.append(f"Gen: {generation}")
+    if train_acc is not None:
+        text_lines.append(f"Train Acc: {train_acc*100:.1f}%")
+    if test_acc is not None:
+        text_lines.append(f"Test Acc: {test_acc*100:.1f}%")
+    if text_lines:
+        info_str = "\n".join(text_lines)
+        plt.text(0.02, 0.02, info_str, transform=plt.gca().transAxes,
+                 ha='left', va='bottom', fontsize=9,
+                 bbox=dict(facecolor='white', alpha=0.6, boxstyle="round"))
 
+    # 8) Save the figure
     if save_path:
         _ensure_dir(save_path)
         plt.savefig(save_path, dpi=300)
     plt.close()
-
 
 def visualize_decision_boundary(
     params, model, X_train, y_train, X_test, y_test, 

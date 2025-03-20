@@ -35,10 +35,7 @@ def evaluate_genome(genome, X_train, y_train, X_test, y_test, epochs=300):
         "fitness": fit,
         "train_acc": train_acc,
         "test_acc": test_acc,
-        "complexity": complexity,
-        # We do not include trained_params and trained_model in the logs
-        # "trained_params": trained_params,
-        # "trained_model": trained_model
+        "complexity": complexity
     }
 
 def reproduce_and_mutate(elites, pop_size):
@@ -54,22 +51,19 @@ def reproduce_and_mutate(elites, pop_size):
 
 def sanitize_metrics(metrics):
     """
-    Remove non-serializable entries (e.g. trained_params, trained_model) from a metrics dict.
-    In our current evaluate_genome, only serializable keys are present.
-    This function exists in case additional keys are added later.
+    Return a sanitized version of the metrics dict (only serializable entries).
     """
-    serializable = {k: v for k, v in metrics.items() if k in ["fitness", "train_acc", "test_acc", "complexity"]}
-    return serializable
+    return {k: v for k, v in metrics.items() if k in ["fitness", "train_acc", "test_acc", "complexity"]}
 
 def evolve_population(X_train, y_train, X_test, y_test, pop_size=20, generations=10, epochs=300, task_name="experiment"):
     """
     1) Initialize population.
     2) For each generation, evaluate every genome on train and test sets.
-       Log per-genome metrics (sanitized) and compute aggregated metrics.
+       Log per-genome metrics and compute aggregated metrics.
     3) Save genome images per generation.
     4) Return:
-         - overall best genome,
-         - evolution_log: full sanitized metrics per generation and a final best summary,
+         - overall best genome (by highest fitness),
+         - evolution_log: full sanitized metrics per generation (with each genome’s metrics),
          - aggregated_metrics: aggregated metrics per generation.
     """
     genome_evo_folder = os.path.join("plots", task_name.lower(), "genome_evolution")
@@ -79,20 +73,24 @@ def evolve_population(X_train, y_train, X_test, y_test, pop_size=20, generations
     best_genome = None
     overall_best_fitness = -999
 
-    evolution_log = []       # list of dicts: each with generation index and list of per-genome metrics
+    evolution_log = []       # list of dicts: one per generation
     aggregated_metrics = []  # list of dicts with aggregated metrics per generation
 
     for gen in trange(generations, desc=f"Evolving {task_name}", ncols=80):
-        gen_log = []  # list to store sanitized metrics for each genome in this generation
+        # Evaluate each genome; store tuple (metrics, genome)
+        gen_log = []
         for genome in population:
             metrics = evaluate_genome(genome, X_train, y_train, X_test, y_test, epochs=epochs)
-            gen_log.append(sanitize_metrics(metrics))
-        evolution_log.append({"generation": gen, "genomes": gen_log})
+            gen_log.append((metrics, genome))
+        # Sanitize metrics for JSON logging
+        sanitized = [sanitize_metrics(m) for m, g in gen_log]
+        evolution_log.append({"generation": gen, "genomes": sanitized})
 
-        fitnesses = [m["fitness"] for m in gen_log]
-        train_accs = [m["train_acc"] for m in gen_log]
-        test_accs  = [m["test_acc"] for m in gen_log]
-        complexities = [m["complexity"] for m in gen_log]
+        # Aggregate metrics for the generation
+        fitnesses = [m["fitness"] for m, g in gen_log]
+        train_accs = [m["train_acc"] for m, g in gen_log]
+        test_accs  = [m["test_acc"] for m, g in gen_log]
+        complexities = [m["complexity"] for m, g in gen_log]
 
         agg = {
             "generation": gen,
@@ -107,27 +105,37 @@ def evolve_population(X_train, y_train, X_test, y_test, pop_size=20, generations
         }
         aggregated_metrics.append(agg)
 
-        # Determine best genome of this generation
-        gen_best_metrics = max(gen_log, key=lambda m: m["fitness"])
+        # Select best genome of this generation by fitness only
+        gen_best_metrics, gen_best_genome = max(gen_log, key=lambda x: x[0]["fitness"])
         if gen_best_metrics["fitness"] > overall_best_fitness:
             overall_best_fitness = gen_best_metrics["fitness"]
-            # For simplicity, we assume that the best genome is the one with matching complexity.
-            best_genome = [g for g in population if sum(c.enabled for c in g.connections) == gen_best_metrics["complexity"]][0]
+            best_genome = gen_best_genome
 
-        # Save image of best genome of this generation
+        # Save image of the generation's best genome with annotations.
         genome_path = os.path.join(genome_evo_folder, f"gen_{gen}.png")
-        visualize_genome(best_genome, save_path=genome_path)
+        visualize_genome(
+            gen_best_genome,
+            save_path=genome_path,
+            generation=gen,
+            train_acc=gen_best_metrics["train_acc"],
+            test_acc=gen_best_metrics["test_acc"],
+            activation_info="ReLU -> Sigmoid"
+        )
 
-        # Create next generation using elites based on fitness.
-        population_sorted = sorted(population, key=lambda g: evaluate_genome(g, X_train, y_train, X_test, y_test, epochs=epochs)["fitness"], reverse=True)
-        elites_genomes = population_sorted[:ELITE_SIZE]
-        population = reproduce_and_mutate(elites_genomes, pop_size)
+        # Create next generation using elites (by fitness).
+        # We sort population by fitness (evaluated fresh for each genome).
+        pop_with_metrics = [(evaluate_genome(g, X_train, y_train, X_test, y_test, epochs=epochs)["fitness"], g) for g in population]
 
-    # Append a final summary entry for the overall best genome.
+        pop_sorted = sorted(pop_with_metrics, key=lambda x: x[0], reverse=True)
+        elites = [g for (fit, g) in pop_sorted[:ELITE_SIZE]]
+        population = reproduce_and_mutate(elites, pop_size)
+
+    # Append overall best genome's summary to the evolution log.
     final_summary = {"final_best_genome": sanitize_metrics(evaluate_genome(best_genome, X_train, y_train, X_test, y_test, epochs=epochs))}
     evolution_log.append(final_summary)
 
     gif_path = os.path.join("plots", task_name.lower(), "genome_evolution.gif")
     create_genome_evolution_gif(genome_evo_folder, gif_path)
+    print(f"🎬 Genome evolution GIF saved: {gif_path}")
 
     return best_genome, evolution_log, aggregated_metrics
