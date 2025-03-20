@@ -5,7 +5,6 @@ import numpy as np
 import optax
 from flax import linen as nn
 from flax.linen import initializers as init
-
 from neat_genome import Genome
 
 class FeedForwardNN(nn.Module):
@@ -43,7 +42,6 @@ train_step_jit = jax.jit(train_step, static_argnums=(4, 5))
 
 def train_model(genome, X, y, learning_rate=0.01, epochs=300):
     model = genome_to_nn(genome)
-    # rng = jax.random.PRNGKey(0)
     rng = jax.random.PRNGKey(np.random.randint(1e9))
     params = model.init(rng, jnp.ones((1, genome.num_inputs)))
     optimizer = optax.adam(learning_rate)
@@ -58,3 +56,10 @@ def evaluate_model(params, model, X, y):
     preds = jnp.round(logits)
     accuracy = jnp.mean(preds == y)
     return float(accuracy)
+
+def update_genome_weights(genome, params):
+    for c in genome.connections:
+        if c.enabled:
+            key = (c.in_node, c.out_node)
+            if key in params:
+                c.weight = float(params[key])
