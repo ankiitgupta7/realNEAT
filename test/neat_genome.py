@@ -71,12 +71,14 @@ class Genome:
         self.add_connection(in_node, out_node, np.random.uniform(-1, 1))
 
     def add_random_node(self):
-        if not self.connections:
+        # only pick from enabled connections
+        enabled_conns = [c for c in self.connections if c.enabled]
+        if not enabled_conns:
             return
-        conn = random.choice(self.connections)
-        if not conn.enabled:
-            return
+
+        conn = random.choice(enabled_conns)
         conn.enabled = False
+
         new_node = self.next_node_id
         self.next_node_id += 1
         self.nodes[new_node] = NodeGene(new_node, 'hidden')
@@ -91,8 +93,8 @@ class Genome:
         if random.uniform(0, 1) < 0.8:
             self.mutate_weights()
         # Add connection
-        if random.uniform(0, 1) < 0.1:
+        if random.uniform(0, 1) < 0.2:
             self.add_random_connection()
         # Add node
-        if random.uniform(0, 1) < 0.05:
+        if random.uniform(0, 1) < 0.15:
             self.add_random_node()

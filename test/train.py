@@ -1,6 +1,7 @@
 # train.py
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 from flax import linen as nn
 from flax.linen import initializers as init
@@ -42,7 +43,8 @@ train_step_jit = jax.jit(train_step, static_argnums=(4, 5))
 
 def train_model(genome, X, y, learning_rate=0.01, epochs=300):
     model = genome_to_nn(genome)
-    rng = jax.random.PRNGKey(0)
+    # rng = jax.random.PRNGKey(0)
+    rng = jax.random.PRNGKey(np.random.randint(1e9))
     params = model.init(rng, jnp.ones((1, genome.num_inputs)))
     optimizer = optax.adam(learning_rate)
     opt_state = optimizer.init(params)

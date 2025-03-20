@@ -5,28 +5,87 @@ matplotlib.use('Agg')  # Disable GUI for batch processing
 import matplotlib.pyplot as plt
 import jax.numpy as jnp
 from PIL import Image
+import matplotlib.patches as mpatches
+
 
 def _ensure_dir(path):
     """Ensure the directory exists for saving plots."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
-def visualize_dataset(X, y, save_path=None):
-    """Scatter plot of dataset points with class colors."""
-    plt.figure(figsize=(5, 5))
-    plt.scatter(X[:,0], X[:,1], c=y, cmap='bwr', edgecolors='k')
-    plt.title("Dataset Visualization")
-    plt.xlabel("x1")
-    plt.ylabel("x2")
+def visualize_fitness_history(best_fitnesses, avg_fitnesses, complexities=None, save_path=None):
+    """Plot best fitness, average fitness, and complexity over generations."""
+    plt.figure(figsize=(7,5))
+    generations = range(len(best_fitnesses))
+
+    plt.plot(generations, best_fitnesses, label="Best Fitness")
+    plt.plot(generations, avg_fitnesses, label="Average Fitness")
+
+    if complexities is not None:
+        plt.plot(generations, complexities, label="Best Complexity", linestyle='--')
+
+    plt.xlabel("Generation")
+    plt.ylabel("Value")
+    plt.title("Fitness & Complexity Over Generations")
+    plt.legend()
+
     if save_path:
         _ensure_dir(save_path)
         plt.savefig(save_path, dpi=300)
     plt.close()
 
+
+def visualize_dataset(X_train, y_train, X_test=None, y_test=None, save_path=None):
+    """
+    Scatter plot of dataset points with class colors.
+    If test data is provided, they are plotted with a different marker and edge color.
+    """
+    plt.figure(figsize=(5, 5))
+    # Plot training data
+    plt.scatter(X_train[:, 0], X_train[:, 1], c=y_train, cmap='bwr', 
+                edgecolors='k', label="Train")
+    
+    # Plot test data if available
+    if X_test is not None and y_test is not None:
+        plt.scatter(X_test[:, 0], X_test[:, 1], c=y_test, cmap='bwr', 
+                    edgecolors='gray', marker='s', label="Test")
+    
+    plt.title("Dataset Visualization")
+    plt.xlabel("x1")
+    plt.ylabel("x2")
+    plt.legend()
+    
+    if save_path:
+        _ensure_dir(save_path)
+        plt.savefig(save_path, dpi=300)
+    plt.close()
+
+def layered_layout(genome):
+    G = nx.DiGraph()
+    # replicate adding nodes/edges if needed, or do it externally
+    # separate node ids by type
+    input_nodes = [n for n, node_gene in genome.nodes.items() if node_gene.node_type == 'input']
+    hidden_nodes = [n for n, node_gene in genome.nodes.items() if node_gene.node_type == 'hidden']
+    output_nodes = [n for n, node_gene in genome.nodes.items() if node_gene.node_type == 'output']
+
+    pos = {}
+    # Place input nodes at x=0
+    for i, n in enumerate(input_nodes):
+        pos[n] = (0, i)
+    # Place hidden nodes at x=1
+    for i, n in enumerate(hidden_nodes):
+        pos[n] = (1, i)
+    # Place output nodes at x=2
+    for i, n in enumerate(output_nodes):
+        pos[n] = (2, i)
+    return pos
+
 def visualize_genome(genome, save_path=None):
     """Render a NEAT genome using NetworkX, save as an image."""
+    
     plt.figure(figsize=(5, 5))
     G = nx.DiGraph()
 
+    # 1) Build graph from genome
     for node_id, node_gene in genome.nodes.items():
         G.add_node(node_id, type=node_gene.node_type)
 
@@ -34,15 +93,36 @@ def visualize_genome(genome, save_path=None):
         if c.enabled:
             G.add_edge(c.in_node, c.out_node, weight=c.weight)
 
-    pos = nx.spring_layout(G, seed=42)
-    node_colors = {'input': 'lightblue', 'output': 'lightgreen', 'hidden': 'lightgray'}
+    # 2) Decide layout
+    # pos = nx.spring_layout(G, seed=42)  # or a custom layered layout
+    pos = layered_layout(genome)
+
+    # 3) Assign colors by node type
+    node_colors = {'input': 'lightblue', 'hidden': 'lightgray', 'output': 'lightgreen'}
     node_list = list(G.nodes())
     node_color_map = [node_colors[G.nodes[n]['type']] for n in node_list]
 
+    # 4) Draw
     nx.draw(G, pos, with_labels=True, node_color=node_color_map, node_size=800, font_size=10)
+
+    # 5) Draw edge labels
     edge_labels = nx.get_edge_attributes(G, 'weight')
     edge_labels_rounded = {k: f"{v:.2f}" for k, v in edge_labels.items()}
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels_rounded, font_color='red')
+
+    # 6) Add a legend for node types
+    legend_handles = [
+        mpatches.Patch(color='lightblue', label='Input'),
+        mpatches.Patch(color='lightgray', label='Hidden'),
+        mpatches.Patch(color='lightgreen', label='Output')
+    ]
+    plt.legend(handles=legend_handles, title="Node Types", loc="best")
+
+    # 7) Mention the activation function used
+    # (In your code, it's ReLU in the first layer, Sigmoid in the output.)
+    plt.text(0.5, 1.05, "Activations: ReLU -> Sigmoid",
+             transform=plt.gca().transAxes,
+             ha='center', va='bottom', fontsize=9)
 
     plt.title(f"Genome (Nodes: {len(G.nodes())}, Edges: {len(G.edges())})")
 
