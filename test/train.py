@@ -18,6 +18,7 @@ class FeedForwardNN(nn.Module):
 
     def __call__(self, x):
         x = nn.relu(self.dense1(x))
+        # x = nn.tanh(self.dense1(x))
         x = nn.sigmoid(self.dense2(x))  # binary classification
         return x
 

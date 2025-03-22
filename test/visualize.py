@@ -136,17 +136,17 @@ def visualize_decision_boundary(
     plt.scatter(X_train[:,0], X_train[:,1], c=y_train, cmap='bwr', edgecolors='k', alpha=0.8, label='Train')
     plt.scatter(X_test[:,0], X_test[:,1], c=y_test, cmap='bwr', edgecolors='gray', alpha=0.4, marker='s', label='Test')
 
-    train_logits = model.apply(params, X_train).squeeze()
-    train_preds = (train_logits > 0.5).astype(int)
-    train_acc = jnp.mean(train_preds == y_train) * 100
+    # train_logits = model.apply(params, X_train).squeeze()
+    # train_preds = (train_logits > 0.5).astype(int)
+    # train_acc = jnp.mean(train_preds == y_train) * 100
 
-    test_logits = model.apply(params, X_test).squeeze()
-    test_preds = (test_logits > 0.5).astype(int)
-    test_acc = jnp.mean(test_preds == y_test) * 100
+    # test_logits = model.apply(params, X_test).squeeze()
+    # test_preds = (test_logits > 0.5).astype(int)
+    # test_acc = jnp.mean(test_preds == y_test) * 100
 
-    plt.text(x_min + 0.2, y_max - 0.3, 
-             f"Train Acc = {train_acc:.1f}%\nTest Acc = {test_acc:.1f}%",
-             color="black", fontsize=10, bbox=dict(facecolor='white', alpha=0.6))
+    # plt.text(x_min + 0.2, y_max - 0.3, 
+    #          f"Train Acc = {train_acc:.1f}%\nTest Acc = {test_acc:.1f}%",
+    #          color="black", fontsize=10, bbox=dict(facecolor='white', alpha=0.6))
 
     plt.title("Decision Boundary")
     plt.xlabel("x1")

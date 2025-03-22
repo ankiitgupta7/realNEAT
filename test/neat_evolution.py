@@ -6,9 +6,8 @@ import random
 import copy
 import os
 
-COMPLEXITY_PENALTY = 0.001  
+COMPLEXITY_PENALTY = 0.0005  
 MUTATION_RATE = 0.9
-ELITE_SIZE = 5
 
 def fitness_function(params, model, X, y, genome):
     """Accuracy - complexity penalty."""
@@ -23,18 +22,32 @@ def evaluate_genome(genome, X, y, epochs=300):
     fit = fitness_function(trained_params, trained_model, X, y, genome)
     return fit, trained_params, trained_model
 
-def reproduce_and_mutate(elites, pop_size):
-    """Create a new population by mutating the best genomes."""
+
+def tournament_selection(fits, tournament_size=3):
+    """
+    Select a parent genome using tournament selection.
+    'fits' is a list of tuples (fitness, genome, params, model).
+    """
+    tournament = random.sample(fits, tournament_size)
+    # Sort tournament participants by fitness in descending order and select the best one
+    tournament.sort(key=lambda x: x[0], reverse=True)
+    return tournament[0][1]  # return the genome of the best participant
+
+def reproduce_and_mutate_tournament(fits, pop_size, tournament_size=3):
+    """
+    Create a new population using tournament selection and mutation.
+    'fits' is a list of tuples (fitness, genome, params, model).
+    """
     new_population = []
     while len(new_population) < pop_size:
-        parent = random.choice(elites)
+        parent = tournament_selection(fits, tournament_size)
         child = copy.deepcopy(parent)
         if random.random() < MUTATION_RATE:
-            child.mutate()  # Assuming Genome has a mutate() method
+            child.mutate()  # apply mutation
         new_population.append(child)
     return new_population
 
-def evolve_population(X_train, y_train, X_test, y_test, pop_size=20, generations=10, epochs=100, task_name="experiment"):
+def evolve_population(X_train, y_train, X_test, y_test, pop_size, generations, epochs, task_name="experiment"):
     """
     1) Initialize population
     2) Train and evolve over multiple generations
@@ -74,6 +87,10 @@ def evolve_population(X_train, y_train, X_test, y_test, pop_size=20, generations
             best_fitness = top_f
             best_genome = top_genome
 
+            # also update the best params and model for this genome
+            best_params = top_params
+            best_model = top_model
+
         # Log fitness for top genome of this generation
         fitness_curve.append(top_f)
 
@@ -92,12 +109,12 @@ def evolve_population(X_train, y_train, X_test, y_test, pop_size=20, generations
         test_acc_curve.append(test_acc)
         train_acc_curve.append(train_acc)
 
-        elites = [f[1] for f in fits[:ELITE_SIZE]]
-        population = reproduce_and_mutate(elites, pop_size)
+        population = reproduce_and_mutate_tournament(fits, pop_size, tournament_size=3)
+
 
     # ✅ Generate GIF of genome evolution
     gif_path = os.path.join("plots", task_name.lower(), "genome_evolution.gif")
     create_genome_evolution_gif(genome_evo_folder, gif_path)
 
     print(f"🎬 Genome evolution GIF saved: {gif_path}")
-    return best_genome, fitness_curve, train_acc_curve, test_acc_curve, connections_history
+    return best_genome, best_params, best_model, fitness_curve, train_acc_curve, test_acc_curve, connections_history

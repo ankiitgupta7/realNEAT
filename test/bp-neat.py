@@ -2,9 +2,10 @@ from datasets import generate_xor_data, generate_circle_data, generate_spiral_da
 from neat_evolution import evolve_population
 from train import train_model, evaluate_model
 from visualize import visualize_decision_boundary, visualize_genome
+import pandas as pd
 import matplotlib.pyplot as plt
 
-def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=10, epochs=1):
+def run_experiment(name, data_func, data_range=(-1,1), pop_size=50, generations=500, epochs=300):
     """Runs a full NEAT experiment: data generation, evolution, training, and visualization."""
     print(f"\n=== Running {name} Experiment ===")
     
@@ -13,27 +14,27 @@ def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=
     print("Dataset Generated. Shape:", X_train.shape, y_train.shape)
 
     # 2) Evolve population to get the best genome
-    best_genome, fitness_curve, train_acc_history, test_acc_history, connections_history = evolve_population(
+    best_genome, best_params, best_model, fitness_curve, train_acc_history, test_acc_history, connections_history = evolve_population(
         X_train, y_train, X_test, y_test, pop_size=pop_size, generations=generations, epochs=epochs, task_name=name
     )
 
     # 3) Visualize best genome architecture
     visualize_genome(best_genome, save_path=f"plots/{name.lower()}/{name}_best_genome.png")
 
-    # 4) Train the best genome with backpropagation
-    trained_params, trained_model = train_model(best_genome, X_train, y_train, epochs=epochs)
+    # # 4) Train the best genome with backpropagation
+    # trained_params, trained_model = train_model(best_genome, X_train, y_train, epochs=epochs)
 
     # 5) Plot decision boundary
     visualize_decision_boundary(
-        trained_params, trained_model, X_train, y_train, X_test, y_test,
+        best_params, best_model, X_train, y_train, X_test, y_test,
         data_range=data_range, resolution=200, save_path=f"plots/{name.lower()}/{name}_decision_boundary.png"
     )
 
     # 6) Evaluate model and print final accuracy
-    final_acc = evaluate_model(trained_params, trained_model, X_test, y_test)
-    final_train_acc = evaluate_model(trained_params, trained_model, X_train, y_train)
-    print(f"{name} Final Train Accuracy: {final_train_acc:.4f}")
-    print(f"{name} Final Test Accuracy: {final_acc:.4f}")
+    final_acc = evaluate_model(best_params, best_model, X_test, y_test)
+    final_train_acc = evaluate_model(best_params, best_model, X_train, y_train)
+    print(f"{name} Train Accuracy for Best Genome: {final_train_acc:.4f}")
+    print(f"{name} Test Accuracy for Best Genmome: {final_acc:.4f}")
 
     # 7) Plot fitness curve
     plt.figure(figsize=(10, 4))
@@ -61,6 +62,16 @@ def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=
     plt.tight_layout()
     plt.savefig(f"plots/{name.lower()}/{name}_evolution_history.png")
     plt.close()
+
+    # 8) Save metrics to CSV
+    metrics_df = pd.DataFrame({
+        'Generation': range(len(fitness_curve)),
+        'Fitness': fitness_curve,
+        'Train_Accuracy': train_acc_history,
+        'Test_Accuracy': test_acc_history,
+        'Connections': connections_history
+    })
+    metrics_df.to_csv(f"plots/{name.lower()}/{name}_metrics.csv", index=False)
 
 
 if __name__ == "__main__":
