@@ -93,7 +93,7 @@ class Genome:
         if random.uniform(0, 1) < 0.8:
             self.mutate_weights()
         # Add connection
-        if random.uniform(0, 1) < 0.2:
+        if random.uniform(0, 1) < 0.15:
             self.add_random_connection()
         # Add node
         if random.uniform(0, 1) < 0.15:

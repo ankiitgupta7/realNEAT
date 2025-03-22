@@ -56,10 +56,3 @@ def evaluate_model(params, model, X, y):
     preds = jnp.round(logits)
     accuracy = jnp.mean(preds == y)
     return float(accuracy)
-
-def update_genome_weights(genome, params):
-    for c in genome.connections:
-        if c.enabled:
-            key = (c.in_node, c.out_node)
-            if key in params:
-                c.weight = float(params[key])
