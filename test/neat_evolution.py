@@ -6,7 +6,7 @@ import random
 import copy
 import os
 
-COMPLEXITY_PENALTY = 0.0005  
+COMPLEXITY_PENALTY = 0.001  
 MUTATION_RATE = 0.9
 ELITE_SIZE = 5
 
@@ -34,7 +34,7 @@ def reproduce_and_mutate(elites, pop_size):
         new_population.append(child)
     return new_population
 
-def evolve_population(X, y, pop_size=20, generations=10, epochs=300, task_name="experiment"):
+def evolve_population(X_train, y_train, X_test, y_test, pop_size=20, generations=10, epochs=100, task_name="experiment"):
     """
     1) Initialize population
     2) Train and evolve over multiple generations
@@ -45,20 +45,26 @@ def evolve_population(X, y, pop_size=20, generations=10, epochs=300, task_name="
     genome_evo_folder = os.path.join("plots", task_name.lower(), "genome_evolution")
     os.makedirs(genome_evo_folder, exist_ok=True)
 
-    population = [Genome(num_inputs=X.shape[1], num_outputs=1) for _ in range(pop_size)]
+    population = [Genome(num_inputs=X_train.shape[1], num_outputs=1) for _ in range(pop_size)]
     best_genome = None
     best_fitness = -999
-    fitness_curve = []
+    fitness_curve = []  # to log best fitness per generation
+    test_acc_curve = []  # to log test accuracy per generation for best fitness genome
+    train_acc_curve = []  # to log train accuracy per generation for best fitness genome
+    connections_history = []  # to log number of connections per generation for best fitness genome
 
     for gen in trange(generations, desc=f"Evolving {task_name}", ncols=80):
         fits = []
         for genome in population:
-            f, p, m = evaluate_genome(genome, X, y, epochs=epochs)
+            f, p, m = evaluate_genome(genome, X_train, y_train, epochs=epochs)
             fits.append((f, genome, p, m))
 
+        # fits.sort(key=lambda x: x[0], reverse=True)
+        # top_f = fits[0][0]
+        # top_genome = fits[0][1]
+
         fits.sort(key=lambda x: x[0], reverse=True)
-        top_f = fits[0][0]
-        top_genome = fits[0][1]
+        top_f, top_genome, top_params, top_model = fits[0]
 
         # ✅ Save best genome of this generation as an image
         genome_path = os.path.join(genome_evo_folder, f"gen_{gen}.png")
@@ -68,7 +74,23 @@ def evolve_population(X, y, pop_size=20, generations=10, epochs=300, task_name="
             best_fitness = top_f
             best_genome = top_genome
 
-        fitness_curve.append(best_fitness)
+        # Log fitness for top genome of this generation
+        fitness_curve.append(top_f)
+
+        num_connections = sum(c.enabled for c in top_genome.connections)
+        connections_history.append(num_connections)
+        
+
+        # Log test accuracy for this generation
+        test_acc = evaluate_model(top_params, top_model, X_test, y_test)
+        train_acc = evaluate_model(top_params, top_model, X_train, y_train)
+        print(f"Generation {gen}: Best Fitness = {top_f:.4f}")
+        print(f"Train Accuracy = {train_acc:.4f}")
+        print(f"Test Accuracy = {test_acc:.4f}")
+        print(f"Number of Connections in Top Genome in this Gen = {num_connections}")
+
+        test_acc_curve.append(test_acc)
+        train_acc_curve.append(train_acc)
 
         elites = [f[1] for f in fits[:ELITE_SIZE]]
         population = reproduce_and_mutate(elites, pop_size)
@@ -78,4 +100,4 @@ def evolve_population(X, y, pop_size=20, generations=10, epochs=300, task_name="
     create_genome_evolution_gif(genome_evo_folder, gif_path)
 
     print(f"🎬 Genome evolution GIF saved: {gif_path}")
-    return best_genome, fitness_curve
+    return best_genome, fitness_curve, train_acc_curve, test_acc_curve, connections_history

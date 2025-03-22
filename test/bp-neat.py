@@ -2,8 +2,9 @@ from datasets import generate_xor_data, generate_circle_data, generate_spiral_da
 from neat_evolution import evolve_population
 from train import train_model, evaluate_model
 from visualize import visualize_decision_boundary, visualize_genome
+import matplotlib.pyplot as plt
 
-def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=5, epochs=100):
+def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=10, epochs=1):
     """Runs a full NEAT experiment: data generation, evolution, training, and visualization."""
     print(f"\n=== Running {name} Experiment ===")
     
@@ -12,8 +13,8 @@ def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=
     print("Dataset Generated. Shape:", X_train.shape, y_train.shape)
 
     # 2) Evolve population to get the best genome
-    best_genome, fitness_curve = evolve_population(
-        X_train, y_train, pop_size=pop_size, generations=generations, epochs=epochs, task_name=name
+    best_genome, fitness_curve, train_acc_history, test_acc_history, connections_history = evolve_population(
+        X_train, y_train, X_test, y_test, pop_size=pop_size, generations=generations, epochs=epochs, task_name=name
     )
 
     # 3) Visualize best genome architecture
@@ -30,18 +31,35 @@ def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=
 
     # 6) Evaluate model and print final accuracy
     final_acc = evaluate_model(trained_params, trained_model, X_test, y_test)
+    final_train_acc = evaluate_model(trained_params, trained_model, X_train, y_train)
+    print(f"{name} Final Train Accuracy: {final_train_acc:.4f}")
     print(f"{name} Final Test Accuracy: {final_acc:.4f}")
 
     # 7) Plot fitness curve
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(6, 4))
-    plt.plot(fitness_curve, label="Best Fitness")
+    plt.figure(figsize=(10, 4))
+    
+    # Plot fitness curve
+    plt.subplot(1, 2, 1)
+    plt.plot(connections_history, label="# of Connections in Top Genome")
     plt.xlabel("Generation")
-    plt.ylabel("Fitness")
-    plt.title(f"{name} Fitness Curve")
+    plt.ylabel("# of Connections")
+    plt.title(f"{name} # of Connections Curve")
     plt.legend()
     plt.grid(True)
-    plt.savefig(f"plots/{name.lower()}/{name}_fitness_curve.png")
+
+    # Plot accuracy histories
+    plt.subplot(1, 2, 2)
+    plt.plot(train_acc_history, label="Train Accuracy")
+    plt.plot(test_acc_history, label="Test Accuracy")
+    plt.plot(fitness_curve, label="Top Fitness")
+    plt.xlabel("Generation")
+    plt.ylabel("Score")
+    plt.title(f"{name} Genome Metrics History")
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.savefig(f"plots/{name.lower()}/{name}_evolution_history.png")
     plt.close()
 
 
