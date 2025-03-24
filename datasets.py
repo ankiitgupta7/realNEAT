@@ -1,6 +1,32 @@
 import numpy as np
 import jax.numpy as jnp
 
+def polynomial_expand(X):
+    """Expand 2D input X into multiple polynomial/trigonometric features."""
+    x1 = X[:, 0]
+    x2 = X[:, 1]
+    x1_sq = x1**2
+    x2_sq = x2**2
+    x1x2  = x1 * x2
+    sin_x1 = jnp.sin(x1)
+    sin_x2 = jnp.sin(x2)
+    cos_x1 = jnp.cos(x1)
+    cos_x2 = jnp.cos(x2)
+
+    # Stack them all into a single feature matrix
+    X_aug = jnp.column_stack([
+        x1,
+        x2,
+        x1_sq,
+        x2_sq,
+        x1x2,
+        sin_x1,
+        sin_x2,
+        cos_x1,
+        cos_x2
+    ])
+    return X_aug
+
 def generate_xor_data(n=200, test_split=0.3, seed=42):
     rng = np.random.RandomState(seed)
     X = rng.uniform(-1, 1, (n, 2))
@@ -33,7 +59,8 @@ def generate_circle_data(n=200, test_split=0.3, seed=42):
     return (jnp.array(X_[idx[:split]]), jnp.array(y_[idx[:split]]),
             jnp.array(X_[idx[split:]]), jnp.array(y_[idx[split:]]))
 
-def generate_spiral_data(n=200, test_split=0.3, noise=0.1, seed=42):
+
+def generate_spiral_data(n=200, test_split=0.3, noise=0.1, seed=42, expand_features=False):
     rng = np.random.RandomState(seed)
     n_half = n // 2
 
@@ -51,5 +78,16 @@ def generate_spiral_data(n=200, test_split=0.3, noise=0.1, seed=42):
     idx = np.arange(n)
     rng.shuffle(idx)
     split = int(n * (1 - test_split))
-    return (jnp.array(X_[idx[:split]]), jnp.array(y_[idx[:split]]),
-            jnp.array(X_[idx[split:]]), jnp.array(y_[idx[split:]]))
+
+    # Convert to JAX arrays
+    X_train = jnp.array(X_[idx[:split]])
+    y_train = jnp.array(y_[idx[:split]])
+    X_test  = jnp.array(X_[idx[split:]])
+    y_test  = jnp.array(y_[idx[split:]])
+
+    # If requested, expand each feature vector to include polynomial/trig terms
+    if expand_features:
+        X_train = polynomial_expand(X_train)
+        X_test  = polynomial_expand(X_test)
+
+    return X_train, y_train, X_test, y_test

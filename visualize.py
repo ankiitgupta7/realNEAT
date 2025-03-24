@@ -110,9 +110,14 @@ def visualize_genome(
         plt.savefig(save_path, dpi=300)
     plt.close()
 
+
+
+
+
 def visualize_decision_boundary(
     params, model, X_train, y_train, X_test, y_test, 
-    data_range=(-1,1), resolution=200, save_path=None
+    data_range=(-1,1), resolution=200, save_path=None,
+    feature_expand_fn=None  # <- NEW
 ):
     """Plot decision boundary with train/test data points."""
     x_min, x_max = data_range
@@ -123,6 +128,10 @@ def visualize_decision_boundary(
 
     xx, yy = jnp.meshgrid(xs, ys)
     grid = jnp.column_stack([xx.ravel(), yy.ravel()])  # shape (resolution^2, 2)
+
+    if feature_expand_fn is not None:
+        grid = feature_expand_fn(grid)
+
 
     logits = model.apply(params, grid).squeeze()  # shape (res^2,)
     preds = (logits > 0.5).astype(int)

@@ -5,6 +5,9 @@ from visualize import visualize_decision_boundary, visualize_genome
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from datasets import polynomial_expand  # at the top
+
+
 def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=10, epochs=300):
     """Runs a full NEAT experiment: data generation, evolution, training, and visualization."""
     print(f"\n=== Running {name} Experiment ===")
@@ -21,13 +24,19 @@ def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=
     # 3) Visualize best genome architecture
     visualize_genome(best_genome, save_path=f"plots/{name.lower()}/{name}_best_genome.png")
 
-    # # 4) Train the best genome with backpropagation
-    # trained_params, trained_model = train_model(best_genome, X_train, y_train, epochs=epochs)
-
     # 5) Plot decision boundary
+    # visualize_decision_boundary(
+    #     best_params, best_model, X_train, y_train, X_test, y_test,
+    #     data_range=data_range, resolution=200, save_path=f"plots/{name.lower()}/{name}_decision_boundary.png"
+    # )
+
     visualize_decision_boundary(
-        best_params, best_model, X_train, y_train, X_test, y_test,
-        data_range=data_range, resolution=200, save_path=f"plots/{name.lower()}/{name}_decision_boundary.png"
+        best_params, best_model,
+        X_train, y_train, X_test, y_test,
+        data_range=data_range,
+        resolution=200,
+        save_path=f"plots/{name.lower()}/{name}_decision_boundary.png",
+        feature_expand_fn=polynomial_expand  # <- KEY ADDITION
     )
 
     # 6) Evaluate model and print final accuracy
@@ -75,6 +84,16 @@ def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=
 
 
 if __name__ == "__main__":
-    run_experiment("SPIRAL", generate_spiral_data, (-3, 3))
+    # run_experiment("SPIRAL", generate_spiral_data, (-3, 3))
     # run_experiment("CIRCLE", generate_circle_data, (-2, 2))
     # run_experiment("XOR", generate_xor_data, (-1, 1))
+    # Example: run experiment with expanded spiral features
+    run_experiment(
+        name="SPIRAL",
+        data_func=lambda **kwargs: generate_spiral_data(expand_features=True, **kwargs),
+        data_range=(-3, 3),
+        pop_size=20,
+        generations=50,
+        epochs=300
+    )
+
