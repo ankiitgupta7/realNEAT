@@ -93,7 +93,7 @@ if __name__ == "__main__":
         data_func=lambda **kwargs: generate_spiral_data(expand_features=True, **kwargs),
         data_range=(-3, 3),
         pop_size=20,
-        generations=50,
-        epochs=300
+        generations=100,
+        epochs=200
     )
 

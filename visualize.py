@@ -179,6 +179,5 @@ def create_genome_evolution_gif(image_folder, output_gif, duration=500):
 
     if images:
         images[0].save(output_gif, save_all=True, append_images=images[1:], duration=duration, loop=0)
-        print(f"✅ Genome evolution GIF saved: {output_gif}")
     else:
         print("⚠️ No images found for genome evolution GIF.")

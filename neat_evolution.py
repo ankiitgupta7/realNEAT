@@ -1,12 +1,12 @@
 from tqdm import trange
 from train import train_model, evaluate_model
 from neat_genome import Genome
-from visualize import visualize_genome, create_genome_evolution_gif  # ✅ Import GIF function
+from visualize import visualize_genome, create_genome_evolution_gif
 import random
 import copy
 import os
 
-COMPLEXITY_PENALTY = 0.005  
+COMPLEXITY_PENALTY = 0.001  
 MUTATION_RATE = 0.9
 
 def fitness_function(params, model, X, y, genome):
@@ -54,7 +54,7 @@ def evolve_population(X_train, y_train, X_test, y_test, pop_size, generations, e
     3) Save genome images per generation for animation
     4) Return best genome & fitness history
     """
-    # ✅ Ensure directory for genome evolution images
+    # Ensure directory for genome evolution images
     genome_evo_folder = os.path.join("plots", task_name.lower(), "genome_evolution")
     os.makedirs(genome_evo_folder, exist_ok=True)
 
@@ -79,7 +79,7 @@ def evolve_population(X_train, y_train, X_test, y_test, pop_size, generations, e
         fits.sort(key=lambda x: x[0], reverse=True)
         top_f, top_genome, top_params, top_model = fits[0]
 
-        # ✅ Save best genome of this generation as an image
+        # Save best genome of this generation as an image
         genome_path = os.path.join(genome_evo_folder, f"gen_{gen}.png")
         visualize_genome(top_genome, save_path=genome_path)
 
@@ -112,9 +112,9 @@ def evolve_population(X_train, y_train, X_test, y_test, pop_size, generations, e
         population = reproduce_and_mutate_tournament(fits, pop_size, tournament_size=3)
 
 
-    # ✅ Generate GIF of genome evolution
+    # Generate GIF of genome evolution
     gif_path = os.path.join("plots", task_name.lower(), "genome_evolution.gif")
     create_genome_evolution_gif(genome_evo_folder, gif_path)
 
-    print(f"🎬 Genome evolution GIF saved: {gif_path}")
+    print(f"Genome evolution GIF saved: {gif_path}")
     return best_genome, best_params, best_model, fitness_curve, train_acc_curve, test_acc_curve, connections_history
