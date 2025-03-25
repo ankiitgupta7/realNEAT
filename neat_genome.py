@@ -32,24 +32,35 @@ class Genome:
         self.nodes = {}
         self.connections = []
         self.innovation_history = []
+        # next_node_id starts after input and output nodes.
         self.next_node_id = num_inputs + num_outputs
 
-        # Initialize input and output nodes
+        # Initialize input nodes.
         for i in range(num_inputs):
             self.nodes[i] = NodeGene(i, 'input')
+        # Initialize output nodes.
         for i in range(num_outputs):
             self.nodes[num_inputs + i] = NodeGene(num_inputs + i, 'output')
 
-        # Fully connect input and output layers
-        self._fully_connect()
+        # Initialize with one hidden node.
+        hidden_node_id = self.next_node_id
+        self.nodes[hidden_node_id] = NodeGene(hidden_node_id, 'hidden')
+        self.next_node_id += 1
+
+        # Connect each input node to the hidden node.
+        for i in range(num_inputs):
+            self.add_connection(i, hidden_node_id, np.random.uniform(-1, 1))
+
+        # Connect the hidden node to each output node.
+        for j in range(num_inputs, num_inputs + num_outputs):
+            self.add_connection(hidden_node_id, j, np.random.uniform(-1, 1))
 
     def _fully_connect(self):
-        for i in range(self.num_inputs):
-            for j in range(self.num_inputs, self.num_inputs + self.num_outputs):
-                self.add_connection(i, j, np.random.uniform(-1, 1))
+        # With the new initialization, full connectivity is already handled.
+        pass
 
     def add_connection(self, in_node, out_node, weight):
-        # Check duplicate
+        # Avoid duplicate connections.
         for c in self.connections:
             if c.in_node == in_node and c.out_node == out_node:
                 return
@@ -64,14 +75,14 @@ class Genome:
     def add_random_connection(self):
         possible_nodes = list(self.nodes.keys())
         in_node, out_node = random.sample(possible_nodes, 2)
-        # no duplicates
+        # Check for duplicates.
         for c in self.connections:
             if c.in_node == in_node and c.out_node == out_node:
                 return
         self.add_connection(in_node, out_node, np.random.uniform(-1, 1))
 
     def add_random_node(self):
-        # only pick from enabled connections
+        # Only select from enabled connections.
         enabled_conns = [c for c in self.connections if c.enabled]
         if not enabled_conns:
             return
@@ -82,19 +93,19 @@ class Genome:
         new_node = self.next_node_id
         self.next_node_id += 1
         self.nodes[new_node] = NodeGene(new_node, 'hidden')
-        # connect in_node -> new_node
+        # Connect the input of the chosen connection to the new node.
         self.add_connection(conn.in_node, new_node, 1.0)
-        # connect new_node -> out_node
+        # Connect the new node to the output of the chosen connection.
         self.add_connection(new_node, conn.out_node, conn.weight)
 
     def mutate(self):
-        """Randomly apply weight, connection, or node mutation."""
-        # Weight mutation
+        """Apply random mutations: weight mutation, adding connections, or adding a node."""
+        # Weight mutation.
         if random.uniform(0, 1) < 0.8:
             self.mutate_weights()
-        # Add connection
+        # Add a connection.
         if random.uniform(0, 1) < 0.15:
             self.add_random_connection()
-        # Add node
+        # Add a node.
         if random.uniform(0, 1) < 0.15:
             self.add_random_node()

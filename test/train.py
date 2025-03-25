@@ -23,10 +23,9 @@ class FeedForwardNN(nn.Module):
         return x
 
 def genome_to_nn(genome):
-    # Force at least 4 hidden neurons to handle XOR, Spiral, etc.
     input_size = genome.num_inputs
     output_size = genome.num_outputs
-    hidden_size = max(4, len([n for n in genome.nodes.values() if n.node_type == 'hidden']))
+    hidden_size = len([n for n in genome.nodes.values() if n.node_type == 'hidden'])
     return FeedForwardNN(input_size, hidden_size, output_size)
 
 def loss_fn(params, model, X, y):
