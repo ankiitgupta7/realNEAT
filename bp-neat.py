@@ -84,16 +84,15 @@ def run_experiment(name, data_func, data_range=(-1,1), pop_size=10, generations=
 
 
 if __name__ == "__main__":
-    # run_experiment("SPIRAL", generate_spiral_data, (-3, 3))
-    run_experiment("CIRCLE", generate_circle_data, (-2, 2))
-    run_experiment("XOR", generate_xor_data, (-1, 1))
+    # run_experiment("CIRCLE", generate_circle_data, (-2, 2))
+    # run_experiment("XOR", generate_xor_data, (-1, 1))
     # Example: run experiment with expanded spiral features
     run_experiment(
         name="SPIRAL",
         data_func=lambda **kwargs: generate_spiral_data(expand_features=True, **kwargs),
         data_range=(-3, 3),
-        pop_size=10,
-        generations=10,
+        pop_size=20,
+        generations=100,
         epochs=300
     )
 

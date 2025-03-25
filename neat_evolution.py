@@ -79,9 +79,6 @@ def evolve_population(X_train, y_train, X_test, y_test, pop_size, generations, e
         fits.sort(key=lambda x: x[0], reverse=True)
         top_f, top_genome, top_params, top_model = fits[0]
 
-        # Save best genome of this generation as an image
-        genome_path = os.path.join(genome_evo_folder, f"gen_{gen}.png")
-        visualize_genome(top_genome, save_path=genome_path)
 
         if top_f > best_fitness:
             best_fitness = top_f
@@ -101,6 +98,12 @@ def evolve_population(X_train, y_train, X_test, y_test, pop_size, generations, e
         # Log test accuracy for this generation
         test_acc = evaluate_model(top_params, top_model, X_test, y_test)
         train_acc = evaluate_model(top_params, top_model, X_train, y_train)
+
+
+        # Save best genome of this generation as an image
+        genome_path = os.path.join(genome_evo_folder, f"gen_{gen}.png")
+        visualize_genome(top_genome, save_path=genome_path, generation=gen, test_acc=test_acc, train_acc=train_acc)
+
         print(f"Generation {gen}: Best Fitness = {top_f:.4f}")
         print(f"Train Accuracy = {train_acc:.4f}")
         print(f"Test Accuracy = {test_acc:.4f}")

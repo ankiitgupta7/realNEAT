@@ -31,49 +31,44 @@ def layered_layout(genome):
     for i, n in enumerate(output_nodes):
         pos[n] = (2, i)
     return pos
-
 def visualize_genome(
     genome,
     save_path=None,
     generation=None,
     train_acc=None,
-    test_acc=None,
-    activation_info="ReLU -> Sigmoid"
+    test_acc=None
 ):
     """
-    Render a NEAT genome using NetworkX, and optionally annotate:
-      - generation index
-      - train/test accuracy
-      - activation function info
+    Render a NEAT genome using NetworkX, and annotate the figure with:
+      - =None, count
+      - Train=None, accuracy
+      - Test accura=Nonecy
     """
-    plt.figure(figsize=(6, 6))
+    plt.figure(figsize=(6, 8))
     G = nx.DiGraph()
 
-    # 1) Build graph from genome
+    # Build graph from genome nodes and connections.
     for node_id, node_gene in genome.nodes.items():
         G.add_node(node_id, type=node_gene.node_type)
-
     for c in genome.connections:
         if c.enabled:
             G.add_edge(c.in_node, c.out_node, weight=c.weight)
 
-    # 2) Decide layout
-    pos = layered_layout(genome)  # or nx.spring_layout(G, seed=42)
+    # Decide layout.
+    pos = layered_layout(genome)
 
-    # 3) Assign colors by node type
+    # Assign colors based on node types.
     node_colors = {'input': 'lightblue', 'hidden': 'lightgray', 'output': 'lightgreen'}
     node_list = list(G.nodes())
     node_color_map = [node_colors[G.nodes[n]['type']] for n in node_list]
 
-    # 4) Draw the graph
+    # Draw the graph and edge labels.
     nx.draw(G, pos, with_labels=True, node_color=node_color_map, node_size=800, font_size=10)
-
-    # 5) Draw edge labels (rounded to 2 decimals)
     edge_labels = nx.get_edge_attributes(G, 'weight')
     edge_labels_rounded = {k: f"{v:.2f}" for k, v in edge_labels.items()}
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels_rounded, font_color='red')
 
-    # 6) Add a legend for node types
+    # Add a legend.
     legend_handles = [
         mpatches.Patch(color='lightblue', label='Input'),
         mpatches.Patch(color='lightgray', label='Hidden'),
@@ -81,33 +76,24 @@ def visualize_genome(
     ]
     plt.legend(handles=legend_handles, title="Node Types", loc="upper left")
 
-    # 7) Title & Additional Text
-    # Basic title showing #nodes and #edges
-    plt.title(f"Genome (Nodes: {len(G.nodes())}, Edges: {len(G.edges())})", pad=20)
-
-    # Show activation info near the top center
-    plt.text(0.5, 1.04, f"Activations: {activation_info}",
-             transform=plt.gca().transAxes,
-             ha='center', va='bottom', fontsize=9)
-
-    # Generation + Accuracies in bottom-left corner
-    text_lines = []
+    # Title with generation and accuracy only
+    title_str = f"Genome (Nodes: {len(G.nodes())}, Edges: {len(G.edges())})"
     if generation is not None:
-        text_lines.append(f"Gen: {generation}")
+        title_str += f" | Gen: {generation}"
     if train_acc is not None:
-        text_lines.append(f"Train Acc: {train_acc*100:.1f}%")
+        title_str += f" | Train: {train_acc*100:.1f}%"
     if test_acc is not None:
-        text_lines.append(f"Test Acc: {test_acc*100:.1f}%")
-    if text_lines:
-        info_str = "\n".join(text_lines)
-        plt.text(0.02, 0.02, info_str, transform=plt.gca().transAxes,
-                 ha='left', va='bottom', fontsize=9,
-                 bbox=dict(facecolor='white', alpha=0.6, boxstyle="round"))
+        title_str += f" | Test: {test_acc*100:.1f}%"
 
-    # 8) Save the figure
+    # Render title inside the plot
+    plt.text(0.5, 1.05, title_str, transform=plt.gca().transAxes,
+             ha='center', va='top', fontsize=11, weight='bold',
+             bbox=dict(facecolor='white', alpha=0.8, boxstyle="round"))
+
+    # Save the figure
     if save_path:
         _ensure_dir(save_path)
-        plt.savefig(save_path, dpi=300)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
 
 
