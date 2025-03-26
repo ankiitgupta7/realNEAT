@@ -158,7 +158,7 @@ def create_genome_evolution_gif(image_folder, output_gif, duration=500):
     """Generate a GIF from saved genome images per generation."""
     images = []
     
-    # ✅ Ensure images are sorted correctly (gen_0, gen_1, ..., gen_n)
+    # Ensure images are sorted correctly (gen_0, gen_1, ..., gen_n)
     for filename in sorted(os.listdir(image_folder), key=lambda x: int(x.split('_')[-1].split('.')[0])):
         img_path = os.path.join(image_folder, filename)
         images.append(Image.open(img_path))
@@ -166,4 +166,4 @@ def create_genome_evolution_gif(image_folder, output_gif, duration=500):
     if images:
         images[0].save(output_gif, save_all=True, append_images=images[1:], duration=duration, loop=0)
     else:
-        print("⚠️ No images found for genome evolution GIF.")
+        print("No images found for genome evolution GIF.")
